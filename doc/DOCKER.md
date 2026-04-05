@@ -8,9 +8,9 @@ Deploy Paperclip on a fresh server in three commands. No git clone required.
 
 ```sh
 mkdir paperclip && cd paperclip
-curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/docker-compose.yml
-curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/.env.example
-curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/setup.sh
+curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/install/docker-compose.yml
+curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/install/.env.example
+curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/install/setup.sh
 chmod +x setup.sh && ./setup.sh
 ```
 
@@ -27,8 +27,8 @@ Open: `http://localhost:3100` (or your configured `PAPERCLIP_PUBLIC_URL`)
 
 ```sh
 mkdir paperclip && cd paperclip
-curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/docker-compose.yml
-curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/.env.example
+curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/install/docker-compose.yml
+curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/install/.env.example
 cp .env.example .env
 # Fill in BETTER_AUTH_SECRET and POSTGRES_PASSWORD:
 #   openssl rand -hex 32   # for BETTER_AUTH_SECRET

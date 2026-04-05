@@ -11,9 +11,9 @@ Deploy on any Linux server with Docker installed. No git clone required.
 
 ```sh
 mkdir paperclip && cd paperclip
-curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/docker-compose.yml
-curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/.env.example
-curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/setup.sh
+curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/install/docker-compose.yml
+curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/install/.env.example
+curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/install/setup.sh
 chmod +x setup.sh && ./setup.sh
 ```
 

@@ -21,5 +21,8 @@ export function resolveTelemetryConfig(fileConfig?: { enabled?: boolean }): Tele
   }
 
   const endpoint = process.env.PAPERCLIP_TELEMETRY_ENDPOINT || undefined;
-  return { enabled: true, endpoint };
+  if (fileConfig?.enabled === true || process.env.PAPERCLIP_TELEMETRY_ENABLED === "1") {
+    return { enabled: true, endpoint };
+  }
+  return { enabled: false };
 }

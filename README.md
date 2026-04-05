@@ -259,9 +259,16 @@ Find Plugins and more at [awesome-paperclip](https://github.com/gsxdsm/awesome-p
 
 ## Telemetry
 
-Paperclip collects anonymous usage telemetry to help us understand how the product is used and improve it. No personal information, issue content, prompts, file paths, or secrets are ever collected. Private repository references are hashed with a per-install salt before being sent.
+Paperclip can send anonymous usage telemetry to help us understand how the product is used and improve it. No personal information, issue content, prompts, file paths, or secrets are ever collected. Private repository references are hashed with a per-install salt before being sent.
 
-Telemetry is **enabled by default** and can be disabled with any of the following:
+Telemetry is **disabled by default**. To opt in, use any of the following:
+
+| Method | How |
+|---|---|
+| Config file | Set `telemetry.enabled: true` in your Paperclip config |
+| Environment variable | `PAPERCLIP_TELEMETRY_ENABLED=1` |
+
+To keep telemetry off (or force it off when it was previously enabled), use:
 
 | Method | How |
 |---|---|
@@ -269,6 +276,8 @@ Telemetry is **enabled by default** and can be disabled with any of the followin
 | Standard convention | `DO_NOT_TRACK=1` |
 | CI environments | Automatically disabled when `CI=true` |
 | Config file | Set `telemetry.enabled: false` in your Paperclip config |
+
+**Feedback sharing:** the API server does not configure a remote feedback export client by default, so optional “share with labs” feedback uploads are not sent off-instance unless you wire `shareClient` in `server/src/index.ts` and set `PAPERCLIP_FEEDBACK_EXPORT_BACKEND_URL` / token as needed.
 
 ## Contributing
 

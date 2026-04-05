@@ -34,7 +34,6 @@ import {
   reconcilePersistedRuntimeServicesOnStartup,
   routineService,
 } from "./services/index.js";
-import { createFeedbackTraceShareClientFromConfig } from "./services/feedback-share-client.js";
 import { createStorageServiceFromConfig } from "./storage/index.js";
 import { printStartupBanner } from "./startup-banner.js";
 import { getBoardClaimWarningUrl, initializeBoardClaimChallenge } from "./board-claim.js";
@@ -524,9 +523,7 @@ export async function startServer(): Promise<StartedServer> {
   });
   const uiMode = config.uiDevMiddleware ? "vite-dev" : config.serveUi ? "static" : "none";
   const storageService = createStorageServiceFromConfig(config);
-  const feedback = feedbackService(db as any, {
-    shareClient: createFeedbackTraceShareClientFromConfig(config),
-  });
+  const feedback = feedbackService(db as any);
   const app = await createApp(db as any, {
     uiMode,
     serverPort: listenPort,

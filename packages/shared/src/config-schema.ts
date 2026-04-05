@@ -96,7 +96,7 @@ export const secretsConfigSchema = z.object({
 });
 
 export const telemetryConfigSchema = z.object({
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().default(false),
 }).default({});
 
 export const paperclipConfigSchema = z
@@ -106,7 +106,7 @@ export const paperclipConfigSchema = z
     database: databaseConfigSchema,
     logging: loggingConfigSchema,
     server: serverConfigSchema,
-    telemetry: telemetryConfigSchema,
+    telemetry: telemetryConfigSchema.default({}),
     auth: authConfigSchema.default({
       baseUrlMode: "auto",
       disableSignUp: false,

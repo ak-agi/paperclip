@@ -52,9 +52,15 @@ RUN test -f server/dist/index.js || (echo "ERROR: server build output missing" &
 FROM base AS production
 ARG USER_UID=1000
 ARG USER_GID=1000
+ARG CLAUDE_CLI_VERSION=latest
+ARG CODEX_CLI_VERSION=latest
+ARG OPENCODE_VERSION=latest
 WORKDIR /app
 COPY --chown=node:node --from=build /app /app
-RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai \
+RUN npm install --global --omit=dev \
+  "@anthropic-ai/claude-code@${CLAUDE_CLI_VERSION}" \
+  "@openai/codex@${CODEX_CLI_VERSION}" \
+  "opencode-ai@${OPENCODE_VERSION}" \
   && mkdir -p /paperclip \
   && chown node:node /paperclip
 
@@ -77,6 +83,9 @@ ENV NODE_ENV=production \
 
 VOLUME ["/paperclip"]
 EXPOSE 3100
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -fsS http://localhost:3100/api/health || exit 1
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "--import", "./server/node_modules/tsx/dist/loader.mjs", "server/dist/index.js"]

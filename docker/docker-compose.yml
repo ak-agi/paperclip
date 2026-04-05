@@ -1,6 +1,8 @@
 services:
   db:
     image: postgres:17-alpine
+    container_name: paperclip-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: paperclip
       POSTGRES_PASSWORD: paperclip
@@ -10,15 +12,20 @@ services:
       interval: 2s
       timeout: 5s
       retries: 30
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    # To access the DB from the host for debugging:
+    #   docker compose exec db psql -U paperclip paperclip
 
   server:
     build:
       context: ..
       dockerfile: Dockerfile
+    container_name: paperclip
+    restart: unless-stopped
+    init: true
     ports:
       - "3100:3100"
     environment:
@@ -29,12 +36,25 @@ services:
       PAPERCLIP_DEPLOYMENT_EXPOSURE: "private"
       PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-http://localhost:3100}"
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3100/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     volumes:
       - paperclip-data:/paperclip
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - internal
+      - default
 
 volumes:
   pgdata:
   paperclip-data:
+
+networks:
+  internal:
+    internal: true

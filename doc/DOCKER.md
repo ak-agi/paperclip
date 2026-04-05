@@ -1,10 +1,79 @@
-# Docker Quickstart
+# Docker
 
 Run Paperclip in Docker without installing Node or pnpm locally.
 
+## Ubuntu Server Quickstart (Recommended)
+
+Deploy Paperclip on a fresh server in three commands. No git clone required.
+
+```sh
+mkdir paperclip && cd paperclip
+curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/docker-compose.yml
+curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/.env.example
+curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/setup.sh
+chmod +x setup.sh && ./setup.sh
+```
+
+The setup script will:
+
+1. Verify Docker and Docker Compose V2 are installed
+2. Copy `.env.example` to `.env` and auto-generate required secrets
+3. Prompt for your public URL (defaults to `http://localhost:3100`)
+4. Run `docker compose up -d`
+
+Open: `http://localhost:3100` (or your configured `PAPERCLIP_PUBLIC_URL`)
+
+### Manual setup (without the script)
+
+```sh
+mkdir paperclip && cd paperclip
+curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/docker-compose.yml
+curl -sLO https://raw.githubusercontent.com/paperclipai/paperclip/master/docker/install/.env.example
+cp .env.example .env
+# Fill in BETTER_AUTH_SECRET and POSTGRES_PASSWORD:
+#   openssl rand -hex 32   # for BETTER_AUTH_SECRET
+#   openssl rand -hex 16   # for POSTGRES_PASSWORD
+# Then edit PAPERCLIP_PUBLIC_URL if not localhost.
+docker compose up -d
+```
+
+### Upgrading
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+### Backup
+
+```sh
+docker compose exec db pg_dump -U paperclip paperclip > backup.sql
+```
+
+### Restore
+
+```sh
+docker compose exec -T db psql -U paperclip paperclip < backup.sql
+```
+
+### Common operations
+
+```sh
+docker compose ps                    # Check status and health
+docker compose logs -f               # Follow all logs
+docker compose logs -f paperclip     # Follow app logs only
+docker compose restart               # Restart all services
+docker compose down                  # Stop all services (data preserved)
+docker compose down -v               # Stop and DELETE all data volumes
+```
+
+---
+
+## Building from Source
+
 All commands below assume you are in the **project root** (the directory containing `package.json`), not inside `docker/`.
 
-## Building the image
+### Building the image
 
 ```sh
 docker build -t paperclip-local .
@@ -18,13 +87,16 @@ Build arguments:
 |-----|---------|---------|
 | `USER_UID` | `1000` | UID for the container `node` user (match your host UID to avoid permission issues on bind mounts) |
 | `USER_GID` | `1000` | GID for the container `node` group |
+| `CLAUDE_CLI_VERSION` | `latest` | Pin `@anthropic-ai/claude-code` version for reproducible builds |
+| `CODEX_CLI_VERSION` | `latest` | Pin `@openai/codex` version for reproducible builds |
+| `OPENCODE_VERSION` | `latest` | Pin `opencode-ai` version for reproducible builds |
 
 ```sh
 docker build -t paperclip-local \
   --build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g) .
 ```
 
-## One-liner (build + run)
+### One-liner (build + run)
 
 ```sh
 docker build -t paperclip-local . && \
@@ -41,18 +113,18 @@ Open: `http://localhost:3100`
 
 Data persistence:
 
-- Embedded PostgreSQL data
-- uploaded assets
-- local secrets key
-- local agent workspace data
+- Embedded PGlite (PostgreSQL) data
+- Uploaded assets
+- Local secrets key
+- Local agent workspace data
 
 All persisted under your bind mount (`./data/docker-paperclip` in the example above).
 
-## Docker Compose
+## Docker Compose (Development)
 
-### Quickstart (embedded SQLite)
+### Quickstart (embedded PGlite)
 
-Single container, no external database. Data persists via a bind mount.
+Single container, no external database. Uses embedded PGlite for storage. Data persists via a named Docker volume.
 
 ```sh
 BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
@@ -61,17 +133,16 @@ BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
 
 Defaults:
 
-- host port: `3100`
-- persistent data dir: `./data/docker-paperclip`
+- Host port: `3100`
+- Data: named volume `paperclip-data`
 
 Optional overrides:
 
 ```sh
-PAPERCLIP_PORT=3200 PAPERCLIP_DATA_DIR=../data/pc \
+PAPERCLIP_PORT=3200 \
+BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
   docker compose -f docker/docker-compose.quickstart.yml up --build
 ```
-
-**Note:** `PAPERCLIP_DATA_DIR` is resolved relative to the compose file (`docker/`), so `../data/pc` maps to `data/pc` in the project root.
 
 If you change host port or use a non-local domain, set `PAPERCLIP_PUBLIC_URL` to the external URL you will use in browser/auth flows.
 
@@ -79,7 +150,7 @@ Pass `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` to enable local adapter runs.
 
 ### Full stack (with PostgreSQL)
 
-Paperclip server + PostgreSQL 17. The database is health-checked before the server starts.
+Paperclip server + PostgreSQL 17. The database is health-checked before the server starts. The database port is not exposed to the host (internal network only).
 
 ```sh
 BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
@@ -87,6 +158,12 @@ BETTER_AUTH_SECRET=$(openssl rand -hex 32) \
 ```
 
 PostgreSQL data persists in a named Docker volume (`pgdata`). Paperclip data persists in `paperclip-data`.
+
+To access the database for debugging, use `docker compose exec`:
+
+```sh
+docker compose -f docker/docker-compose.yml exec db psql -U paperclip paperclip
+```
 
 ### Untrusted PR review
 
@@ -112,10 +189,10 @@ services:
 
 `PAPERCLIP_PUBLIC_URL` is used as the primary source for:
 
-- auth public base URL
+- Auth public base URL
 - Better Auth base URL defaults
-- bootstrap invite URL defaults
-- hostname allowlist defaults (hostname extracted from URL)
+- Bootstrap invite URL defaults
+- Hostname allowlist defaults (hostname extracted from URL)
 
 Granular overrides remain available if needed (`PAPERCLIP_AUTH_PUBLIC_BASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `PAPERCLIP_ALLOWED_HOSTNAMES`).
 
@@ -217,8 +294,8 @@ systemctl --user stop paperclip-pod      # Stop all
 Use this when you want to mimic a fresh machine that only has Ubuntu + npm and verify:
 
 - `npx paperclipai onboard --yes` completes
-- the server binds to `0.0.0.0:3100` so host access works
-- onboard/run banners and startup logs are visible in your terminal
+- The server binds to `0.0.0.0:3100` so host access works
+- Onboard/run banners and startup logs are visible in your terminal
 
 Build + run:
 
@@ -252,3 +329,4 @@ Notes:
 
 - The `docker-entrypoint.sh` adjusts the container `node` user UID/GID at startup to match the values passed via `USER_UID`/`USER_GID`, avoiding permission issues on bind-mounted volumes.
 - Paperclip data persists via Docker volumes/bind mounts (compose) or at `~/.local/share/paperclip` (quadlet).
+- The Dockerfile includes a `HEALTHCHECK` instruction. Both `docker ps` and `docker compose ps` will report container health status.

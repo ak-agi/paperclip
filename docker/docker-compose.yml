@@ -23,6 +23,9 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      args:
+        USER_UID: ${UID:-1000}
+        USER_GID: ${GID:-1000}
     container_name: paperclip
     restart: unless-stopped
     init: true
@@ -36,6 +39,10 @@ services:
       PAPERCLIP_DEPLOYMENT_EXPOSURE: "private"
       PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-http://localhost:3100}"
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET must be set}"
+      USER_UID: ${UID:-1000}
+      USER_GID: ${GID:-1000}
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3100/api/health"]
       interval: 15s

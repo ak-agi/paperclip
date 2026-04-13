@@ -21,7 +21,9 @@ The setup script will:
 3. Prompt for your public URL (defaults to `http://localhost:3100`)
 4. Run `docker compose up -d`
 
-Open: `http://localhost:3100` (or your configured `PAPERCLIP_PUBLIC_URL`)
+The install compose defaults to this fork's published image: `ghcr.io/ak-agi/paperclip`.
+
+Open your configured `PAPERCLIP_PUBLIC_URL`.
 
 ### Manual setup (without the script)
 
@@ -33,7 +35,8 @@ cp .env.example .env
 # Fill in BETTER_AUTH_SECRET and POSTGRES_PASSWORD:
 #   openssl rand -hex 32   # for BETTER_AUTH_SECRET
 #   openssl rand -hex 16   # for POSTGRES_PASSWORD
-# Then edit PAPERCLIP_PUBLIC_URL if not localhost.
+# Then set PAPERCLIP_PUBLIC_URL to the exact browser-facing URL
+# (for example https://desk.example.com or http://localhost:3100).
 docker compose up -d
 ```
 

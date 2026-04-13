@@ -65,12 +65,32 @@ fill_secret POSTGRES_PASSWORD 16
 
 # ── Prompt for public URL ──────────────────────────────────────────
 current_url=$(grep -E '^PAPERCLIP_PUBLIC_URL=' .env | cut -d= -f2-)
-if [ -z "$current_url" ] || [ "$current_url" = "http://localhost:3100" ]; then
+current_port=$(grep -E '^PAPERCLIP_PORT=' .env | cut -d= -f2-)
+if [ -z "${current_port:-}" ]; then
+  current_port=3100
+fi
+localhost_url="http://localhost:${current_port}"
+if [ -z "$current_url" ] || [ "$current_url" = "http://localhost:3100" ] || [ "$current_url" = "$localhost_url" ]; then
   echo ""
   echo "Paperclip needs a public URL for auth callbacks."
-  echo "If deploying on a server with a domain, enter it now (e.g. https://desk.example.com)."
-  read -r -p "Public URL [http://localhost:3100]: " user_url
-  if [ -n "$user_url" ]; then
+  echo "Enter the exact URL users will open in their browser."
+  echo "For a remote Ubuntu server, this should normally be your public domain, e.g. https://desk.example.com."
+  while true; do
+    read -r -p "Public URL [${localhost_url}]: " user_url
+    if [ -z "$user_url" ]; then
+      echo ""
+      echo "Using ${localhost_url} only works when the browser is on this same machine."
+      read -r -p "Use ${localhost_url}? [y/N]: " confirm_localhost
+      case "${confirm_localhost}" in
+        y|Y|yes|YES)
+          user_url="$localhost_url"
+          ;;
+        *)
+          continue
+          ;;
+      esac
+    fi
+
     # Do not pass user_url through sed replacement: & \ and the | delimiter break sed.
     tmp="$(mktemp)"
     awk -v url="$user_url" '
@@ -78,7 +98,8 @@ if [ -z "$current_url" ] || [ "$current_url" = "http://localhost:3100" ]; then
       { print }
     ' .env >"$tmp" && mv "$tmp" .env
     echo "  Set PAPERCLIP_PUBLIC_URL=${user_url}"
-  fi
+    break
+  done
 fi
 
 echo ""

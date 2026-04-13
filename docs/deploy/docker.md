@@ -17,7 +17,7 @@ curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/insta
 chmod +x setup.sh && ./setup.sh
 ```
 
-The setup script auto-generates secrets, prompts for your public URL, and starts the stack. Open [http://localhost:3100](http://localhost:3100).
+The setup script auto-generates secrets, requires an explicit public URL choice, and starts the stack. The install compose defaults to `ghcr.io/ak-agi/paperclip`. Open your configured `PAPERCLIP_PUBLIC_URL`.
 
 ### Manual Setup
 
@@ -26,7 +26,8 @@ cp .env.example .env
 # Generate secrets:
 #   openssl rand -hex 32   → BETTER_AUTH_SECRET
 #   openssl rand -hex 16   → POSTGRES_PASSWORD
-# Set PAPERCLIP_PUBLIC_URL if not localhost
+# Set PAPERCLIP_PUBLIC_URL to the exact browser-facing URL
+# (for example https://desk.example.com or http://localhost:3100)
 docker compose up -d
 ```
 
@@ -53,8 +54,9 @@ docker compose exec -T db psql -U paperclip paperclip < backup.sql
 |----------|----------|---------|---------|
 | `BETTER_AUTH_SECRET` | Yes | — | Auth signing secret |
 | `POSTGRES_PASSWORD` | Yes | — | Database password |
-| `PAPERCLIP_PUBLIC_URL` | No | `http://localhost:3100` | URL users access in browser; used for auth callbacks |
+| `PAPERCLIP_PUBLIC_URL` | Yes | — | Exact URL users access in browser; used for auth callbacks |
 | `PAPERCLIP_PORT` | No | `3100` | Host port mapping |
+| `PAPERCLIP_IMAGE` | No | `ghcr.io/ak-agi/paperclip` | Image repository to pull |
 | `PAPERCLIP_VERSION` | No | `latest` | Image tag to pull |
 | `OPENAI_API_KEY` | No | — | Enable Codex adapter |
 | `ANTHROPIC_API_KEY` | No | — | Enable Claude adapter |

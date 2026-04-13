@@ -23,7 +23,7 @@ services:
         max-file: "3"
 
   paperclip:
-    image: ghcr.io/paperclipai/paperclip:${PAPERCLIP_VERSION:-latest}
+    image: ${PAPERCLIP_IMAGE:-ghcr.io/ak-agi/paperclip}:${PAPERCLIP_VERSION:-latest}
     container_name: paperclip
     restart: unless-stopped
     init: true
@@ -32,7 +32,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-paperclip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-paperclip}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
-      PAPERCLIP_PUBLIC_URL: ${PAPERCLIP_PUBLIC_URL:-http://localhost:3100}
+      PAPERCLIP_PUBLIC_URL: ${PAPERCLIP_PUBLIC_URL:?Set PAPERCLIP_PUBLIC_URL in .env}
       PAPERCLIP_DEPLOYMENT_MODE: authenticated
       PAPERCLIP_DEPLOYMENT_EXPOSURE: private
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

@@ -207,6 +207,22 @@ Granular overrides remain available if needed (`PAPERCLIP_AUTH_PUBLIC_BASE_URL`,
 
 Set `PAPERCLIP_ALLOWED_HOSTNAMES` explicitly only when you need additional hostnames beyond the public URL host (for example Tailscale/LAN aliases or multiple private hostnames).
 
+### CLI login from the host
+
+If you run `paperclipai auth login` on the host while `PAPERCLIP_HOME=/paperclip` is still exported from a Docker setup, the CLI will try to write its board auth file to `/paperclip/auth.json` and fail with `EACCES`.
+
+Use one of these host-safe forms instead:
+
+```sh
+env -u PAPERCLIP_HOME npx paperclipai auth login --base-url "$PAPERCLIP_PUBLIC_URL"
+```
+
+```sh
+PAPERCLIP_AUTH_STORE="$HOME/.paperclip/auth.json" npx paperclipai auth login --base-url "$PAPERCLIP_PUBLIC_URL"
+```
+
+The CLI stores board credentials in `PAPERCLIP_HOME/auth.json` by default, so `PAPERCLIP_HOME` should usually only be set inside the container.
+
 ## Claude + Codex Local Adapters in Docker
 
 The image pre-installs:

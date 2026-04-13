@@ -32,11 +32,10 @@ mkdir paperclip && cd paperclip
 curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/install/docker-compose.yml
 curl -sLO https://raw.githubusercontent.com/ak-agi/paperclip/master/docker/install/.env.example
 cp .env.example .env
-# Fill in BETTER_AUTH_SECRET and POSTGRES_PASSWORD:
-#   openssl rand -hex 32   # for BETTER_AUTH_SECRET
-#   openssl rand -hex 16   # for POSTGRES_PASSWORD
-# Then set PAPERCLIP_PUBLIC_URL to the exact browser-facing URL
-# (for example https://desk.example.com or http://localhost:3100).
+# Fill in all three required values in .env:
+#   BETTER_AUTH_SECRET=$(openssl rand -hex 32)
+#   POSTGRES_PASSWORD=$(openssl rand -hex 16)
+#   PAPERCLIP_PUBLIC_URL=https://desk.example.com   # or http://localhost:3100
 docker compose up -d
 ```
 

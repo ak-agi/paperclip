@@ -168,6 +168,13 @@ To access the database for debugging, use `docker compose exec`:
 docker compose -f docker/docker-compose.yml exec db psql -U paperclip paperclip
 ```
 
+Note: the app service in `docker/docker-compose.yml` is named `server` (not `paperclip`), so service-specific commands use that name:
+
+```sh
+docker compose -f docker/docker-compose.yml logs -f server
+docker compose -f docker/docker-compose.yml restart server
+```
+
 ### Untrusted PR review
 
 Isolated container for reviewing untrusted pull requests with Codex or Claude, without exposing your host machine. See `doc/UNTRUSTED-PR-REVIEW.md` for the full workflow.

@@ -75,6 +75,25 @@ RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/cod
   && mkdir -p /paperclip \
   && chown node:node /paperclip
 
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Browser + deploy tooling for agent-driven web workflows:
+#   netlify-cli  — static deploys
+#   playwright + chromium (--with-deps) — headless browser checks / screenshots
+#   fonts        — so Chromium renders text (blank otherwise)
+#   unzip/zip    — common build/asset tooling
+# Chromium installs to /ms-playwright (outside the /paperclip VOLUME, which would
+# mask it at runtime). PLAYWRIGHT_BROWSERS_PATH (above) points agents at it.
+RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --global \
+      netlify-cli@26.1.0 \
+      playwright@1.61.0 \
+  && npx playwright install --with-deps chromium \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+       fonts-liberation fonts-noto-core fonts-noto-color-emoji unzip zip \
+  && rm -rf /var/lib/apt/lists/* \
+  && chmod -R a+rx /ms-playwright
+
 COPY scripts/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

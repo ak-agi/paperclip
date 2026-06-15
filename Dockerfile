@@ -67,7 +67,10 @@ ARG CLAUDE_CLI_VERSION=latest
 ARG CODEX_CLI_VERSION=latest
 ARG OPENCODE_VERSION=latest
 WORKDIR /app
-COPY --chown=node:node --from=build /app /app
+
+# Code-independent tooling is installed BEFORE the app build is copied in, so these
+# expensive layers (npm globals, apt, the Chromium download) stay in the build cache
+# across app code changes — only the COPY below and later steps re-run on a code change.
 RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai @google/gemini-cli@latest \
   && apt-get update \
   && apt-get install -y --no-install-recommends openssh-client jq \
@@ -93,6 +96,9 @@ RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --global \
        fonts-liberation fonts-noto-core fonts-noto-color-emoji unzip zip \
   && rm -rf /var/lib/apt/lists/* \
   && chmod -R a+rx /ms-playwright
+
+# App build output last — this is the layer that actually changes build-to-build.
+COPY --chown=node:node --from=build /app /app
 
 COPY scripts/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

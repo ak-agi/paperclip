@@ -577,6 +577,67 @@ export async function startServer(): Promise<StartedServer> {
   const uiMode = config.uiDevMiddleware ? "vite-dev" : config.serveUi ? "static" : "none";
   const storageService = createStorageServiceFromConfig(config);
   const feedback = feedbackService(db as any);
+  const backupSettingsSvc = instanceSettingsService(db as any);
+  let databaseBackupInFlight = false;
+  const runServerDatabaseBackup = async (
+    trigger: InstanceDatabaseBackupTrigger,
+  ): Promise<InstanceDatabaseBackupRunResult | null> => {
+    if (databaseBackupInFlight) {
+      const message = "Database backup already in progress";
+      if (trigger === "scheduled") {
+        logger.warn("Skipping scheduled database backup because a previous backup is still running");
+        return null;
+      }
+      throw conflict(message);
+    }
+
+    databaseBackupInFlight = true;
+    const startedAt = new Date();
+    const startedAtMs = Date.now();
+    const label = trigger === "scheduled" ? "Automatic" : "Manual";
+    try {
+      logger.info({ backupDir: config.databaseBackupDir, trigger }, `${label} database backup starting`);
+      // Read retention from Instance Settings (DB) so changes take effect without restart.
+      const generalSettings = await backupSettingsSvc.getGeneral();
+      const retention = generalSettings.backupRetention;
+
+      const result = await runDatabaseBackup({
+        connectionString: activeDatabaseConnectionString,
+        backupDir: config.databaseBackupDir,
+        retention,
+        filenamePrefix: "paperclip",
+      });
+      const finishedAt = new Date();
+      const response: InstanceDatabaseBackupRunResult = {
+        ...result,
+        trigger,
+        backupDir: config.databaseBackupDir,
+        retention,
+        startedAt: startedAt.toISOString(),
+        finishedAt: finishedAt.toISOString(),
+        durationMs: Date.now() - startedAtMs,
+      };
+      logger.info(
+        {
+          backupFile: result.backupFile,
+          sizeBytes: result.sizeBytes,
+          prunedCount: result.prunedCount,
+          backupDir: config.databaseBackupDir,
+          retention,
+          trigger,
+          durationMs: response.durationMs,
+        },
+        `${label} database backup complete: ${formatDatabaseBackupResult(result)}`,
+      );
+      return response;
+    } catch (err) {
+      logger.error({ err, backupDir: config.databaseBackupDir, trigger }, `${label} database backup failed`);
+      throw err;
+    } finally {
+      databaseBackupInFlight = false;
+    }
+  };
+  const pluginWorkerManager = createPluginWorkerManager();
   const app = await createApp(db as any, {
     uiMode,
     serverPort: listenPort,

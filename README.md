@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="#quickstart"><strong>Quickstart</strong></a> &middot;
-  <a href="https://paperclip.ing/docs"><strong>Docs</strong></a> &middot;
+  <a href="https://docs.paperclip.ing"><strong>Docs</strong></a> &middot;
   <a href="https://github.com/paperclipai/paperclip"><strong>GitHub</strong></a> &middot;
   <a href="https://discord.gg/m4HZY7xNG3"><strong>Discord</strong></a> &middot;
   <a href="https://x.com/papercliping"><strong>Twitter</strong></a> &middot;
@@ -380,7 +380,7 @@ See [doc/DEVELOPING.md](doc/DEVELOPING.md) for the full development guide.
 - ✅ Better Budgeting
 - ✅ Agent Reviews and Approvals
 - ✅ Multiple Human Users
-- ⚪ Cloud / Sandbox agents (e.g. Cursor / e2b agents)
+- ⚪ Cloud / Sandbox agents (e.g. Cursor / e2b / Novita agents)
 - ⚪ Artifacts & Work Products
 - ⚪ Memory / Knowledge
 - ⚪ Enforced Outcomes
@@ -408,6 +408,9 @@ Paperclip ships with opt-in OpenTelemetry auto-instrumentation for the server (t
 ## Telemetry
 
 Paperclip can send anonymous usage telemetry to help us understand how the product is used and improve it. No personal information, issue content, prompts, file paths, or secrets are ever collected. Private repository references are hashed with a per-install salt before being sent.
+
+Contributors changing emitted telemetry events should follow the [Telemetry Data Contract](packages/shared/src/telemetry/README.md).
+For proposed first-party events that are not in the generated contract yet, follow [Telemetry Workflow](doc/TELEMETRY_WORKFLOW.md).
 
 Telemetry is **disabled by default**. To opt in, use any of the following:
 

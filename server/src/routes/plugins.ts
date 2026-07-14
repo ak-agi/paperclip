@@ -47,7 +47,12 @@ import {
 } from "@paperclipai/shared";
 import { pluginRegistryService } from "../services/plugin-registry.js";
 import { pluginLifecycleManager } from "../services/plugin-lifecycle.js";
-import { getPluginUiContributionMetadata, pluginLoader } from "../services/plugin-loader.js";
+import {
+  getPluginUiContributionMetadata,
+  listMissingDeclaredPluginEntrypoints,
+  pluginLoader,
+  REPO_ROOT,
+} from "../services/plugin-loader.js";
 import { logActivity } from "../services/activity-log.js";
 import { publishGlobalLiveEvent } from "../services/live-events.js";
 import { issueService } from "../services/issues.js";
@@ -76,8 +81,7 @@ import {
   setStoredLocalFolder,
 } from "../services/plugin-local-folders.js";
 import {
-  extractSecretRefPathsFromConfig,
-  PLUGIN_SECRET_REFS_DISABLED_MESSAGE,
+  extractSecretRefBindingsFromConfig,
 } from "../services/plugin-secrets-handler.js";
 import { badRequest, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
 
@@ -124,6 +128,7 @@ interface AvailableBundledPlugin {
   localPath: string;
   tag: "example" | "first-party";
   experimental: boolean;
+  hasBuiltEntrypoints: boolean;
 }
 
 /** Response body for GET /api/plugins/:pluginId/health */
@@ -152,13 +157,24 @@ const PLUGIN_SCOPED_API_RESPONSE_HEADER_ALLOWLIST = new Set([
 ]);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, "../../..");
 const EXPERIMENTAL_BUNDLED_PLUGIN_PACKAGE_NAMES = new Set([
   "@paperclipai/plugin-llm-wiki",
   "@paperclipai/plugin-modal",
   "@paperclipai/plugin-workspace-diff",
 ]);
-let bundledPluginsCache: Promise<AvailableBundledPlugin[]> | null = null;
+/**
+ * Cached bundled-plugin discovery. Static metadata (name, key, display, paths)
+ * is expensive to compute and never changes at runtime, so it is cached. The
+ * `hasBuiltEntrypoints` flag is filesystem state that flips when a plugin is
+ * auto-built on install, so it is recomputed per request in `listBundledPlugins`
+ * rather than cached.
+ */
+type DiscoveredBundledPlugin = {
+  entry: Omit<AvailableBundledPlugin, "hasBuiltEntrypoints">;
+  packageRoot: string;
+  pkgJson: Record<string, unknown>;
+};
+let bundledPluginsCache: Promise<DiscoveredBundledPlugin[]> | null = null;
 
 function titleCasePluginName(packageName: string): string {
   const localName = packageName.split("/").pop() ?? packageName;
@@ -266,9 +282,9 @@ function isExperimentalBundledPlugin(packageRoot: string, packageName: string): 
   );
 }
 
-async function discoverBundledPlugins(): Promise<AvailableBundledPlugin[]> {
+async function discoverBundledPlugins(): Promise<DiscoveredBundledPlugin[]> {
   const pluginRoot = path.resolve(REPO_ROOT, "packages/plugins");
-  const bundledPlugins: AvailableBundledPlugin[] = [];
+  const bundledPlugins: DiscoveredBundledPlugin[] = [];
   for (const packageJsonPath of await findPackageJsonFiles(pluginRoot)) {
     const packageRoot = path.dirname(packageJsonPath);
     const pkgJson = await readJsonFile(packageJsonPath);
@@ -288,20 +304,24 @@ async function discoverBundledPlugins(): Promise<AvailableBundledPlugin[]> {
     const metadata = await bundledPluginMetadata(packageRoot, pkgJson);
     const tag = packageRoot.includes(`${path.sep}examples${path.sep}`) ? "example" : "first-party";
     bundledPlugins.push({
-      packageName,
-      pluginKey: metadata.pluginKey ?? packageName,
-      displayName: metadata.displayName ?? titleCasePluginName(packageName),
-      description: metadata.description
-        ?? `Bundled Paperclip plugin from ${path.relative(REPO_ROOT, packageRoot)}.`,
-      localPath: packageRoot,
-      tag,
-      experimental: isExperimentalBundledPlugin(packageRoot, packageName),
+      entry: {
+        packageName,
+        pluginKey: metadata.pluginKey ?? packageName,
+        displayName: metadata.displayName ?? titleCasePluginName(packageName),
+        description: metadata.description
+          ?? `Bundled Paperclip plugin from ${path.relative(REPO_ROOT, packageRoot)}.`,
+        localPath: packageRoot,
+        tag,
+        experimental: isExperimentalBundledPlugin(packageRoot, packageName),
+      },
+      packageRoot,
+      pkgJson,
     });
   }
 
   return bundledPlugins.sort((left, right) => {
-    if (left.tag !== right.tag) return left.tag === "first-party" ? -1 : 1;
-    return left.displayName.localeCompare(right.displayName);
+    if (left.entry.tag !== right.entry.tag) return left.entry.tag === "first-party" ? -1 : 1;
+    return left.entry.displayName.localeCompare(right.entry.displayName);
   });
 }
 
@@ -310,7 +330,13 @@ async function listBundledPlugins(): Promise<AvailableBundledPlugin[]> {
     bundledPluginsCache = null;
     throw error;
   });
-  return bundledPluginsCache;
+  const discovered = await bundledPluginsCache;
+  // Recompute the filesystem-dependent flag per request so a plugin auto-built
+  // during install is no longer reported as missing its entrypoints.
+  return discovered.map(({ entry, packageRoot, pkgJson }) => ({
+    ...entry,
+    hasBuiltEntrypoints: listMissingDeclaredPluginEntrypoints(packageRoot, pkgJson).length === 0,
+  }));
 }
 
 /**
@@ -2106,6 +2132,11 @@ export function pluginRoutes(
   router.get("/plugins/:pluginId/config", async (req, res) => {
     assertBoardOrgAccess(req);
     const { pluginId } = req.params;
+    const companyId = typeof req.query.companyId === "string" ? req.query.companyId.trim() : "";
+    if (!companyId) {
+      throw badRequest('"companyId" is required and must be a non-empty string');
+    }
+    assertCompanyAccess(req, companyId);
 
     const plugin = await resolvePlugin(registry, pluginId);
     if (!plugin) {
@@ -2113,7 +2144,7 @@ export function pluginRoutes(
       return;
     }
 
-    const config = await registry.getConfig(plugin.id);
+    const config = await registry.getConfig(plugin.id, companyId);
     res.json(config);
   });
 
@@ -2143,7 +2174,12 @@ export function pluginRoutes(
       return;
     }
 
-    const body = req.body as { configJson?: Record<string, unknown> } | undefined;
+    const body = req.body as { companyId?: string; configJson?: Record<string, unknown> } | undefined;
+    const companyId = typeof body?.companyId === "string" ? body.companyId.trim() : "";
+    if (!companyId) {
+      throw badRequest('"companyId" is required and must be a non-empty string');
+    }
+    assertCompanyAccess(req, companyId);
     if (!body?.configJson || typeof body.configJson !== "object") {
       res.status(400).json({ error: '"configJson" is required and must be an object' });
       return;
@@ -2174,13 +2210,14 @@ export function pluginRoutes(
     }
 
     try {
-      const secretRefsByPath = extractSecretRefPathsFromConfig(body.configJson, schema);
-      if (secretRefsByPath.size > 0) {
-        res.status(422).json({ error: PLUGIN_SECRET_REFS_DISABLED_MESSAGE });
+      const secretRefs = extractSecretRefBindingsFromConfig(body.configJson, schema);
+      if (secretRefs.length > 0) {
+        res.status(422).json({ error: "Plugin secret references require the governed tool-access server layer" });
         return;
       }
 
-      const result = await registry.upsertConfig(plugin.id, {
+      const result = await registry.upsertConfig(plugin.id, companyId, {
+        companyId,
         configJson: body.configJson,
       });
       await logPluginMutationActivity(req, "plugin.config.updated", plugin.id, {
@@ -2198,7 +2235,7 @@ export function pluginRoutes(
           await bridgeDeps.workerManager.call(
             plugin.id,
             "configChanged",
-            { config: body.configJson },
+            { config: body.configJson, companyId },
           );
         } catch (rpcErr) {
           if (

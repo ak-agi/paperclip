@@ -57,6 +57,32 @@ function hasNonEmptyEnvValue(env: Record<string, string>, key: string): boolean 
   return typeof raw === "string" && raw.trim().length > 0;
 }
 
+// Grok runs headlessly in this adapter (`grok --single`, no interactive approver).
+// Grok's `dontAsk` permission mode makes it cancel a turn the instant a tool would
+// need approval: it streams reasoning, then emits
+// `{"type":"end","stopReason":"Cancelled","num_turns":1}` and executes no tools — so
+// the agent appears to "run for a few seconds and quit" without doing any work, while
+// Paperclip still records the run as succeeded. `--always-approve` does NOT rescue it.
+// `bypassPermissions` is the headless-safe way to say "run autonomously without
+// prompting", so we default to it and remap `dontAsk` onto it.
+export const DEFAULT_GROK_LOCAL_PERMISSION_MODE = "bypassPermissions";
+
+// Permission modes that require an interactive approver and therefore make Grok's
+// headless `--single` run cancel instead of executing tools.
+const GROK_HEADLESS_INCOMPATIBLE_PERMISSION_MODES = new Set(["dontAsk"]);
+
+export function resolveGrokHeadlessPermissionMode(rawMode: string): {
+  mode: string;
+  remappedFrom: string | null;
+} {
+  const trimmed = rawMode.trim();
+  if (!trimmed) return { mode: DEFAULT_GROK_LOCAL_PERMISSION_MODE, remappedFrom: null };
+  if (GROK_HEADLESS_INCOMPATIBLE_PERMISSION_MODES.has(trimmed)) {
+    return { mode: DEFAULT_GROK_LOCAL_PERMISSION_MODE, remappedFrom: trimmed };
+  }
+  return { mode: trimmed, remappedFrom: null };
+}
+
 function renderPaperclipEnvNote(env: Record<string, string>): string {
   const paperclipKeys = Object.keys(env)
     .filter((key) => key.startsWith("PAPERCLIP_"))
@@ -202,7 +228,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   );
   const command = asString(config.command, "grok");
   const model = asString(config.model, DEFAULT_GROK_LOCAL_MODEL).trim();
-  const permissionMode = asString(config.permissionMode, "dontAsk").trim() || "dontAsk";
+  const { mode: permissionMode, remappedFrom: permissionModeRemappedFrom } =
+    resolveGrokHeadlessPermissionMode(asString(config.permissionMode, ""));
   const reasoningEffort = asString(config.reasoningEffort, "").trim();
   const maxTurns = asNumber(config.maxTurns, 0);
   const alwaysApprove = asBoolean(config.alwaysApprove, true);
@@ -388,6 +415,11 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
 
     const commandNotes = (() => {
       const notes: string[] = ["Prompt is passed to Grok via --single in headless mode."];
+      if (permissionModeRemappedFrom) {
+        notes.push(
+          `Remapped permission mode "${permissionModeRemappedFrom}" to "${permissionMode}": "${permissionModeRemappedFrom}" makes Grok cancel headless tool execution after one turn.`,
+        );
+      }
       if (alwaysApprove) notes.push("Added --always-approve for unattended execution.");
       if (stagedAssets.stagedInstructionsPath) {
         notes.push(`Staged project instructions at ${stagedAssets.stagedInstructionsPath} for native Grok discovery.`);

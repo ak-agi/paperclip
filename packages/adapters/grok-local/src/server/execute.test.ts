@@ -29,7 +29,7 @@ vi.mock("@paperclipai/adapter-utils/execution-target", () => ({
   runAdapterExecutionTargetProcess: runProcessMock,
 }));
 
-import { execute } from "./execute.js";
+import { execute, resolveGrokHeadlessPermissionMode } from "./execute.js";
 
 const tempRoots: string[] = [];
 
@@ -72,7 +72,7 @@ describe("grok_local execute", () => {
           "streaming-json",
           "--always-approve",
           "--permission-mode",
-          "dontAsk",
+          "bypassPermissions",
         ]),
       );
       expect(await fs.readFile(path.join(root, "Agents.md"), "utf8")).toContain("You are Grok.");
@@ -138,6 +138,48 @@ describe("grok_local execute", () => {
     expect(logs.map((entry) => entry.chunk)).not.toEqual([]);
   });
 
+  it("remaps the headless-incompatible dontAsk permission mode to bypassPermissions", async () => {
+    const root = await makeTempRoot();
+
+    let capturedArgs: string[] = [];
+    runProcessMock.mockImplementation(async (_runId, _target, _command, args) => {
+      capturedArgs = args;
+      return {
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        stdout: [
+          JSON.stringify({ type: "text", data: "done" }),
+          JSON.stringify({ type: "end", stopReason: "EndTurn", sessionId: "sess-1", requestId: "req-1" }),
+        ].join("\n"),
+        stderr: "",
+      };
+    });
+
+    const ctx: AdapterExecutionContext = {
+      runId: "run-remap",
+      agent: {
+        id: "agent-1",
+        companyId: "company-1",
+        name: "Grok Agent",
+        adapterType: "grok_local",
+        adapterConfig: {},
+      },
+      runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: null },
+      config: { cwd: root, permissionMode: "dontAsk" },
+      context: {},
+      authToken: "run-token",
+      onLog: async () => {},
+    };
+
+    await execute(ctx);
+
+    const permissionModeIndex = capturedArgs.indexOf("--permission-mode");
+    expect(permissionModeIndex).toBeGreaterThanOrEqual(0);
+    expect(capturedArgs[permissionModeIndex + 1]).toBe("bypassPermissions");
+    expect(capturedArgs).not.toContain("dontAsk");
+  });
+
   it("cleans up staged assets when setup fails before the Grok process starts", async () => {
     const root = await makeTempRoot();
     const instructionsPath = path.join(root, "managed", "AGENTS.md");
@@ -183,5 +225,29 @@ describe("grok_local execute", () => {
     expect(runProcessMock).not.toHaveBeenCalled();
     expect(await pathExists(path.join(root, "Agents.md"))).toBe(false);
     expect(await pathExists(path.join(root, ".claude", "skills", "paperclip"))).toBe(false);
+  });
+});
+
+describe("resolveGrokHeadlessPermissionMode", () => {
+  it("defaults to bypassPermissions when no mode is configured", () => {
+    expect(resolveGrokHeadlessPermissionMode("")).toEqual({ mode: "bypassPermissions", remappedFrom: null });
+    expect(resolveGrokHeadlessPermissionMode("   ")).toEqual({ mode: "bypassPermissions", remappedFrom: null });
+  });
+
+  it("remaps the headless-incompatible dontAsk mode to bypassPermissions and records the origin", () => {
+    expect(resolveGrokHeadlessPermissionMode("dontAsk")).toEqual({
+      mode: "bypassPermissions",
+      remappedFrom: "dontAsk",
+    });
+    expect(resolveGrokHeadlessPermissionMode("  dontAsk  ")).toEqual({
+      mode: "bypassPermissions",
+      remappedFrom: "dontAsk",
+    });
+  });
+
+  it("passes through other modes unchanged", () => {
+    for (const mode of ["bypassPermissions", "auto", "acceptEdits", "default", "plan"]) {
+      expect(resolveGrokHeadlessPermissionMode(mode)).toEqual({ mode, remappedFrom: null });
+    }
   });
 });

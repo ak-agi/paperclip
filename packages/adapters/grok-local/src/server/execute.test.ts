@@ -12,9 +12,10 @@ const prepareRuntimeMock = vi.hoisted(() => vi.fn(async () => ({
 })));
 const resolveCommandForLogsMock = vi.hoisted(() => vi.fn(async () => "grok"));
 const runProcessMock = vi.hoisted(() => vi.fn());
+const isRemoteMock = vi.hoisted(() => vi.fn(() => false));
 
 vi.mock("@paperclipai/adapter-utils/execution-target", () => ({
-  adapterExecutionTargetIsRemote: () => false,
+  adapterExecutionTargetIsRemote: isRemoteMock,
   adapterExecutionTargetRemoteCwd: (_target: unknown, cwd: string) => cwd,
   overrideAdapterExecutionTargetRemoteCwd: (target: unknown, _cwd: string) => target,
   adapterExecutionTargetSessionIdentity: () => ({ kind: "local" }),
@@ -50,6 +51,7 @@ describe("grok_local execute", () => {
     prepareRuntimeMock.mockClear();
     resolveCommandForLogsMock.mockClear();
     runProcessMock.mockReset();
+    isRemoteMock.mockReturnValue(false);
   });
 
   afterEach(async () => {
@@ -221,6 +223,55 @@ describe("grok_local execute", () => {
       // The env handed to the spawn (not just the preflight check) must carry the prepend.
       expect(capturedEnv.PATH).toContain(path.join("/custom/home", ".local", "bin"));
       expect(capturedEnv.PATH?.startsWith(path.join("/custom/home", ".local", "bin"))).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("does not inject the local host PATH for remote execution targets", async () => {
+    isRemoteMock.mockReturnValue(true);
+    vi.stubEnv("HOME", "/custom/home");
+    vi.stubEnv("PATH", "/usr/bin");
+    try {
+      const root = await makeTempRoot();
+      let capturedEnv: Record<string, string> = {};
+      runProcessMock.mockImplementation(async (_runId, _target, _command, _args, options) => {
+        capturedEnv = options.env;
+        return {
+          exitCode: 0,
+          signal: null,
+          timedOut: false,
+          stdout: [
+            JSON.stringify({ type: "text", data: "done" }),
+            JSON.stringify({ type: "end", stopReason: "EndTurn", sessionId: "sess-1", requestId: "req-1" }),
+          ].join("\n"),
+          stderr: "",
+        };
+      });
+
+      const ctx: AdapterExecutionContext = {
+        runId: "run-remote",
+        agent: {
+          id: "agent-1",
+          companyId: "company-1",
+          name: "Grok Agent",
+          adapterType: "grok_local",
+          adapterConfig: {},
+        },
+        runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: null },
+        config: { cwd: root },
+        context: {},
+        // Shape doesn't matter here: readAdapterExecutionTarget is mocked to pass it
+        // through and isRemoteMock drives the remote branch.
+        executionTarget: { kind: "remote", transport: "ssh" } as unknown as AdapterExecutionContext["executionTarget"],
+        authToken: "run-token",
+        onLog: async () => {},
+      };
+
+      await execute(ctx);
+
+      // The remote profile owns PATH; we must not clobber it with this host's local bin.
+      expect(capturedEnv.PATH).toBeUndefined();
     } finally {
       vi.unstubAllEnvs();
     }

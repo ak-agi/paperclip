@@ -397,12 +397,18 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         (entry): entry is [string, string] => typeof entry[1] === "string",
       ),
     );
-    const runtimeEnv = prependLocalBinToPath(ensurePathInEnv(effectiveEnv));
+    // The `$HOME/.local/bin` prepend is a *local*-execution concern: it targets the
+    // grok binary on this Paperclip host. For remote (e.g. SSH) targets the binary lives
+    // under the remote user's home and the remote profile owns PATH, so injecting this
+    // host's PATH would clobber the remote one and break resolution. Only prepend locally.
+    const runtimeEnv = executionTargetIsRemote
+      ? ensurePathInEnv(effectiveEnv)
+      : prependLocalBinToPath(ensurePathInEnv(effectiveEnv));
     // The process below is spawned with `env` (runChildProcess merges it over
     // process.env), so the local-bin prepend must be reflected there too. Otherwise the
     // resolvability preflight passes using runtimeEnv while the actual Grok process still
     // launches with the un-prepended PATH and can fail to find `grok`.
-    if (typeof runtimeEnv.PATH === "string") {
+    if (!executionTargetIsRemote && typeof runtimeEnv.PATH === "string") {
       env.PATH = runtimeEnv.PATH;
     }
     await ensureAdapterExecutionTargetCommandResolvable(command, executionTarget, cwd, runtimeEnv, {

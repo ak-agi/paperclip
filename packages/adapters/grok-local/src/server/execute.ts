@@ -398,6 +398,13 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       ),
     );
     const runtimeEnv = prependLocalBinToPath(ensurePathInEnv(effectiveEnv));
+    // The process below is spawned with `env` (runChildProcess merges it over
+    // process.env), so the local-bin prepend must be reflected there too. Otherwise the
+    // resolvability preflight passes using runtimeEnv while the actual Grok process still
+    // launches with the un-prepended PATH and can fail to find `grok`.
+    if (typeof runtimeEnv.PATH === "string") {
+      env.PATH = runtimeEnv.PATH;
+    }
     await ensureAdapterExecutionTargetCommandResolvable(command, executionTarget, cwd, runtimeEnv, {
       installCommand: ctx.runtimeCommandSpec?.installCommand ?? null,
       timeoutSec,

@@ -83,6 +83,24 @@ export function resolveGrokHeadlessPermissionMode(rawMode: string): {
   return { mode: trimmed, remappedFrom: null };
 }
 
+// The Grok binary is typically installed at `$HOME/.local/bin/grok` (Grok's own
+// installer target, and where Paperclip's Docker volume keeps it). The server's
+// inherited PATH does not include that directory, and `ensurePathInEnv` only fills an
+// empty PATH — so bare `grok` resolves only via a `/usr/local/bin/grok` symlink that
+// lives in the image layer and disappears when the container is recreated. Prepend
+// `$HOME/.local/bin` so the persistent-volume binary keeps resolving across a redeploy
+// (and so host installs work without extra PATH configuration).
+export function prependLocalBinToPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const home = typeof env.HOME === "string" ? env.HOME.trim() : "";
+  if (!home) return env;
+  const localBin = path.join(home, ".local", "bin");
+  const pathKey = typeof env.PATH === "string" ? "PATH" : typeof env.Path === "string" ? "Path" : "PATH";
+  const currentPath = typeof env[pathKey] === "string" ? (env[pathKey] as string) : "";
+  const entries = currentPath.split(path.delimiter).filter(Boolean);
+  if (entries.includes(localBin)) return env;
+  return { ...env, [pathKey]: [localBin, ...entries].join(path.delimiter) };
+}
+
 function renderPaperclipEnvNote(env: Record<string, string>): string {
   const paperclipKeys = Object.keys(env)
     .filter((key) => key.startsWith("PAPERCLIP_"))
@@ -379,7 +397,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         (entry): entry is [string, string] => typeof entry[1] === "string",
       ),
     );
-    const runtimeEnv = ensurePathInEnv(effectiveEnv);
+    const runtimeEnv = prependLocalBinToPath(ensurePathInEnv(effectiveEnv));
     await ensureAdapterExecutionTargetCommandResolvable(command, executionTarget, cwd, runtimeEnv, {
       installCommand: ctx.runtimeCommandSpec?.installCommand ?? null,
       timeoutSec,

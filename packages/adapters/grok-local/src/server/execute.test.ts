@@ -29,7 +29,7 @@ vi.mock("@paperclipai/adapter-utils/execution-target", () => ({
   runAdapterExecutionTargetProcess: runProcessMock,
 }));
 
-import { execute, resolveGrokHeadlessPermissionMode } from "./execute.js";
+import { execute, prependLocalBinToPath, resolveGrokHeadlessPermissionMode } from "./execute.js";
 
 const tempRoots: string[] = [];
 
@@ -249,5 +249,26 @@ describe("resolveGrokHeadlessPermissionMode", () => {
     for (const mode of ["bypassPermissions", "auto", "acceptEdits", "default", "plan"]) {
       expect(resolveGrokHeadlessPermissionMode(mode)).toEqual({ mode, remappedFrom: null });
     }
+  });
+});
+
+describe("prependLocalBinToPath", () => {
+  it("prepends $HOME/.local/bin ahead of the existing PATH", () => {
+    const result = prependLocalBinToPath({ HOME: "/paperclip", PATH: "/usr/local/bin:/usr/bin" });
+    expect(result.PATH).toBe(`/paperclip/.local/bin${path.delimiter}/usr/local/bin:/usr/bin`);
+  });
+
+  it("is a no-op when $HOME/.local/bin is already on PATH", () => {
+    const env = { HOME: "/paperclip", PATH: `/paperclip/.local/bin${path.delimiter}/usr/bin` };
+    expect(prependLocalBinToPath(env)).toBe(env);
+  });
+
+  it("returns the env unchanged when HOME is not set", () => {
+    const env = { PATH: "/usr/bin" };
+    expect(prependLocalBinToPath(env)).toBe(env);
+  });
+
+  it("sets PATH to just the local bin when PATH is empty", () => {
+    expect(prependLocalBinToPath({ HOME: "/home/dev", PATH: "" }).PATH).toBe("/home/dev/.local/bin");
   });
 });

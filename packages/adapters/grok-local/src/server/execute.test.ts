@@ -30,7 +30,7 @@ vi.mock("@paperclipai/adapter-utils/execution-target", () => ({
   runAdapterExecutionTargetProcess: runProcessMock,
 }));
 
-import { execute, prependLocalBinToPath, resolveGrokHeadlessPermissionMode } from "./execute.js";
+import { execute, prependLocalBinToPath, resolveGrokHeadlessPermissionMode, resolvePathEnvKey } from "./execute.js";
 
 const tempRoots: string[] = [];
 
@@ -367,5 +367,25 @@ describe("prependLocalBinToPath", () => {
 
   it("sets PATH to just the local bin when PATH is empty", () => {
     expect(prependLocalBinToPath({ HOME: "/home/dev", PATH: "" }).PATH).toBe("/home/dev/.local/bin");
+  });
+
+  it("updates the Windows-style `Path` key when that is the one present", () => {
+    const result = prependLocalBinToPath({ HOME: "/home/dev", Path: "/usr/bin" });
+    expect(result.Path).toBe(`/home/dev/.local/bin${path.delimiter}/usr/bin`);
+    expect(result.PATH).toBeUndefined();
+  });
+});
+
+describe("resolvePathEnvKey", () => {
+  it("prefers uppercase PATH", () => {
+    expect(resolvePathEnvKey({ PATH: "/usr/bin", Path: "/other" })).toBe("PATH");
+  });
+
+  it("falls back to Windows-style Path when PATH is absent", () => {
+    expect(resolvePathEnvKey({ Path: "/usr/bin" })).toBe("Path");
+  });
+
+  it("defaults to PATH when neither is set", () => {
+    expect(resolvePathEnvKey({})).toBe("PATH");
   });
 });

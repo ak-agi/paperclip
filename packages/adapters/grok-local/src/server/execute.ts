@@ -90,11 +90,19 @@ export function resolveGrokHeadlessPermissionMode(rawMode: string): {
 // lives in the image layer and disappears when the container is recreated. Prepend
 // `$HOME/.local/bin` so the persistent-volume binary keeps resolving across a redeploy
 // (and so host installs work without extra PATH configuration).
+// Windows exposes the search path as `Path`; POSIX uses `PATH`. Return whichever the
+// env actually carries so reads and writes target the same key (defaulting to `PATH`).
+export function resolvePathEnvKey(env: NodeJS.ProcessEnv): "PATH" | "Path" {
+  if (typeof env.PATH === "string") return "PATH";
+  if (typeof env.Path === "string") return "Path";
+  return "PATH";
+}
+
 export function prependLocalBinToPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const home = typeof env.HOME === "string" ? env.HOME.trim() : "";
   if (!home) return env;
   const localBin = path.join(home, ".local", "bin");
-  const pathKey = typeof env.PATH === "string" ? "PATH" : typeof env.Path === "string" ? "Path" : "PATH";
+  const pathKey = resolvePathEnvKey(env);
   const currentPath = typeof env[pathKey] === "string" ? (env[pathKey] as string) : "";
   const entries = currentPath.split(path.delimiter).filter(Boolean);
   if (entries.includes(localBin)) return env;
@@ -407,9 +415,14 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     // The process below is spawned with `env` (runChildProcess merges it over
     // process.env), so the local-bin prepend must be reflected there too. Otherwise the
     // resolvability preflight passes using runtimeEnv while the actual Grok process still
-    // launches with the un-prepended PATH and can fail to find `grok`.
-    if (!executionTargetIsRemote && typeof runtimeEnv.PATH === "string") {
-      env.PATH = runtimeEnv.PATH;
+    // launches with the un-prepended PATH and can fail to find `grok`. Copy whichever
+    // path key was actually updated (`PATH` on POSIX, `Path` on Windows).
+    if (!executionTargetIsRemote) {
+      const pathKey = resolvePathEnvKey(runtimeEnv);
+      const prependedPath = runtimeEnv[pathKey];
+      if (typeof prependedPath === "string") {
+        env[pathKey] = prependedPath;
+      }
     }
     await ensureAdapterExecutionTargetCommandResolvable(command, executionTarget, cwd, runtimeEnv, {
       installCommand: ctx.runtimeCommandSpec?.installCommand ?? null,
